@@ -7,11 +7,15 @@
     {
       "id": "com.sololatino.provider",
       "name": "SoloLatino Provider",
-      "version": "1.0.0",
       "description": "Extractor de reproducciones de SoloLatino",
-      "icon": "https://sololatino.net/favicon.ico",
-      "filename": "index.js",
+      "version": "1.0.0",
+      "author": "yesidreateguicastellanos-lgtm",
       "supportedTypes": ["movie", "tv"],
+      "supportedPlatforms": ["android", "ios"],
+      "formats": ["mp4", "m3u8"],
+      "contentLanguage": ["es"],
+      "logo": "https://sololatino.net/favicon.ico",
+      "filename": "index.js",
       "enabled": true
     }
   ]
