@@ -1,17 +1,5 @@
-const BASE_URL = "https://sololatino.net";
 const TMDB_API_KEY = "0f20f54cc72e14f7792c2114ce6b1c5a";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
-
-function slugify(text) {
-  return String(text)
-    .toLowerCase()
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9 -]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-}
 
 function chunk(s, n) {
   const out = [];
@@ -35,36 +23,38 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
   try {
     const kind = mediaType === "movie" ? "movie" : "tv";
-    const tr = await fetch(
+    const er = await fetch(
       "https://api.themoviedb.org/3/" + kind + "/" + tmdbId +
-        "?api_key=" + TMDB_API_KEY + "&language=es-MX"
+        "/external_ids?api_key=" + TMDB_API_KEY
     );
-    const td = await tr.json();
-    const slug = slugify(td.title || td.name);
-    const u =
-      mediaType === "movie"
-        ? BASE_URL + "/pelicula/" + slug
-        : BASE_URL + "/episodio/" + slug + "-temporada-" + season + "-episodio-" + episode;
+    const ed = await er.json();
+    const imdb = ed.imdb_id;
+    dbg("imdb: " + imdb);
+    if (!imdb) return debug;
 
-    const r = await fetch(u, {
-      headers: { "User-Agent": UA, Referer: BASE_URL + "/" },
-    });
-    const html = await r.text();
+    const key =
+      mediaType === "movie" ? imdb : imdb + "-" + season + "x" + episode;
 
-    // URL emb... completa
-    const embs = html.match(/https?:\/\/emb[^\s"'<>]*/gi) || [];
-    if (embs.length) dump("E", embs[0], 6);
-    else dbg("sin url emb");
+    const tries = [
+      "https://embed69.org/f/" + key,
+      "https://xupalace.org/video/" + key,
+    ];
 
-    // contexto alrededor de embed69 y xupalac
-    ["embed69", "xupalac"].forEach((k) => {
-      const i = html.indexOf(k);
-      if (i < 0) {
-        dbg(k + ": no");
-      } else {
-        dump(k.substr(0, 2).toUpperCase() + "-", html.substr(Math.max(0, i - 60), 200).replace(/\s+/g, " "), 6);
+    for (const u of tries) {
+      try {
+        const r = await fetch(u, {
+          headers: { "User-Agent": UA, Referer: "https://sololatino.net/" },
+        });
+        const t = await r.text();
+        dbg(u.substr(8, 26) + " HTTP " + r.status + " len " + t.length);
+        dbg("m3u8:" + (t.indexOf(".m3u8") >= 0) +
+            " iframe:" + (t.indexOf("<iframe") >= 0) +
+            " dataLink:" + (t.indexOf("dataLink") >= 0));
+        dump("B", t.replace(/\s+/g, " ").substr(0, 140), 4);
+      } catch (e) {
+        dbg("fallo " + u.substr(8, 20) + " " + e.message);
       }
-    });
+    }
 
     return debug;
   } catch (error) {
