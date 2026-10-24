@@ -13,57 +13,14 @@ function slugify(text) {
     .replace(/-+/g, "-");
 }
 
-function unpackJS(packedCode) {
-  try {
-    const match = packedCode.match(
-      /}\('(.+)',\s*(\d+),\s*(\d+),\s*'([^']+)'\.split\('\|'\)/
-    );
-    if (!match) return packedCode;
-    let p = match[1];
-    const a = parseInt(match[2], 10);
-    let c = parseInt(match[3], 10);
-    const k = match[4].split("|");
-    const baseUnpack = (num) =>
-      (num < a ? "" : baseUnpack(Math.floor(num / a))) +
-      ((num = num % a) > 35 ? String.fromCharCode(num + 29) : num.toString(36));
-    while (c--) {
-      if (k[c]) {
-        p = p.replace(new RegExp("\\b" + baseUnpack(c) + "\\b", "g"), k[c]);
-      }
-    }
-    return p;
-  } catch (e) {
-    return packedCode;
-  }
+function chunk(s, n) {
+  const out = [];
+  for (let i = 0; i < s.length; i += n) out.push(s.substr(i, n));
+  return out;
 }
 
-async function extractVOE(iframeUrl) {
-  try {
-    const res = await fetch(iframeUrl, { headers: { "User-Agent": UA } });
-    const html = await res.text();
-    const hls =
-      html.match(/'hls':\s*'([^']+)'/i) || html.match(/"hls":\s*"([^"]+)"/i);
-    if (hls) return hls[1];
-    const direct = html.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"']*/i);
-    return direct ? direct[0] : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-async function extractStreamwish(iframeUrl) {
-  try {
-    const res = await fetch(iframeUrl, { headers: { "User-Agent": UA } });
-    const html = await res.text();
-    const packed = html.match(/eval\(function\(p,a,c,k,e,d\).*\)/);
-    const text = packed ? unpackJS(packed[0]) : html;
-    const m =
-      text.match(/file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i) ||
-      text.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"']*/i);
-    return m ? m[1] || m[0] : null;
-  } catch (e) {
-    return null;
-  }
+function uniq(arr) {
+  return arr.filter((x, i) => arr.indexOf(x) === i);
 }
 
 async function getTitles(tmdbId, mediaType) {
@@ -74,169 +31,80 @@ async function getTitles(tmdbId, mediaType) {
   const res = await fetch(url);
   if (!res.ok) throw new Error("TMDB HTTP " + res.status);
   const d = await res.json();
-  const names = [
-    d.title || d.name,
-    d.original_title || d.original_name,
-  ].filter(Boolean);
-  return names.filter((n, i) => names.indexOf(n) === i);
-}
-
-function buildUrls(slug, mediaType, season, episode) {
-  if (mediaType === "movie") {
-    return [BASE_URL + "/pelicula/" + slug];
-  }
-  return [
-    BASE_URL + "/episodio/" + slug + "-temporada-" + season + "-episodio-" + episode,
-    BASE_URL + "/episodio/" + slug + "-" + season + "x" + episode,
-  ];
-}
-
-function snip(html, re, n) {
-  const m = re.exec(html);
-  if (!m) return null;
-  const i = m.index;
-  return html.substr(Math.max(0, i - 20), n).replace(/\s+/g, " ");
-}
-
-async function resolveEmbed(iframeUrl, streams, dbg) {
-  if (iframeUrl.startsWith("//")) iframeUrl = "https:" + iframeUrl;
-  else if (iframeUrl.startsWith("/")) iframeUrl = BASE_URL + iframeUrl;
-
-  let directUrl = null;
-  let serverName = "";
-
-  if (iframeUrl.includes("voe")) {
-    serverName = "VOE";
-    directUrl = await extractVOE(iframeUrl);
-  } else if (
-    iframeUrl.includes("streamwish") ||
-    iframeUrl.includes("filelions")
-  ) {
-    serverName = "Streamwish";
-    directUrl = await extractStreamwish(iframeUrl);
-  } else {
-    dbg("embed no soportado " + iframeUrl);
-    return;
-  }
-
-  if (!directUrl) {
-    dbg("sin video en " + serverName + " " + iframeUrl);
-    return;
-  }
-
-  streams.push({
-    name: "SoloLatino - " + serverName,
-    title: "SoloLatino - " + serverName,
-    url: directUrl,
-    quality: "Auto",
-    headers: { "User-Agent": UA, Referer: iframeUrl },
-    provider: "sololatino",
-  });
+  return [d.title || d.name].filter(Boolean);
 }
 
 async function getStreams(tmdbId, mediaType, season, episode) {
   const debug = [];
   const dbg = (msg) =>
     debug.push({
-      name: "DEBUG: " + msg,
-      title: "DEBUG: " + msg,
+      name: msg,
+      title: msg,
       url: "https://example.com/debug",
       quality: "Debug",
       provider: "sololatino",
     });
+  const dump = (label, text, max) => {
+    const parts = chunk(text, 34).slice(0, max || 8);
+    if (!parts.length) dbg(label + " -");
+    parts.forEach((p, i) => dbg(label + (i + 1) + ": " + p));
+  };
 
   try {
     const titles = await getTitles(tmdbId, mediaType);
-    if (!titles.length) {
-      dbg("TMDB sin titulo");
-      return debug;
-    }
+    const slug = slugify(titles[0]);
+    const u =
+      mediaType === "movie"
+        ? BASE_URL + "/pelicula/" + slug
+        : BASE_URL + "/episodio/" + slug + "-temporada-" + season + "-episodio-" + episode;
 
-    let htmlText = null;
-    let pageUrl = null;
-    for (const t of titles) {
-      for (const u of buildUrls(slugify(t), mediaType, season, episode)) {
-        try {
-          const r = await fetch(u, {
-            headers: { "User-Agent": UA, Referer: BASE_URL + "/" },
-          });
-          if (r.ok) {
-            htmlText = await r.text();
-            pageUrl = u;
-            break;
-          } else {
-            dbg("HTTP " + r.status + " " + u);
-          }
-        } catch (e) {
-          dbg("fetch fallo " + u + " " + e.message);
-        }
-      }
-      if (htmlText) break;
-    }
-    if (!htmlText) return debug;
+    const r = await fetch(u, {
+      headers: { "User-Agent": UA, Referer: BASE_URL + "/" },
+    });
+    dbg("HTTP " + r.status);
+    const html = await r.text();
 
-    const streams = [];
-
-    // 1) iframes directos en el HTML
-    const iframeRegex = /<iframe[^>]+src=["']([^"']+)["']/gi;
-    let match;
-    while ((match = iframeRegex.exec(htmlText)) !== null) {
-      await resolveEmbed(match[1], streams, dbg);
-    }
-
-    // 2) API estilo DooPlay (WordPress)
-    let post =
-      (htmlText.match(/data-post=["'](\d+)["']/) || [])[1] ||
-      (htmlText.match(/postid-(\d+)/) || [])[1] ||
-      (htmlText.match(/[?&]p=(\d+)/) || [])[1];
-    dbg("post id: " + post);
-
-    if (post) {
-      const type = mediaType === "movie" ? "movie" : "tv";
-      for (let nume = 1; nume <= 4; nume++) {
-        const apiUrl =
-          BASE_URL + "/wp-json/dooplayer/v2/" + post + "/" + type + "/" + nume;
-        try {
-          const r = await fetch(apiUrl, {
-            headers: { "User-Agent": UA, Referer: pageUrl },
-          });
-          const txt = await r.text();
-          dbg("API " + nume + " HTTP " + r.status + " " + txt.substr(0, 110));
-          let embed = null;
-          try {
-            const j = JSON.parse(txt);
-            embed = j.embed_url || j.url || null;
-          } catch (e) {}
-          if (embed) {
-            const iframeInside = /<iframe[^>]+src=["']([^"']+)["']/i.exec(embed);
-            await resolveEmbed(iframeInside ? iframeInside[1] : embed, streams, dbg);
-          }
-        } catch (e) {
-          dbg("API " + nume + " fallo " + e.message);
-        }
+    // dominios externos
+    const hosts = [];
+    const reH = /https?:\/\/([a-z0-9.-]+)/gi;
+    let m;
+    while ((m = reH.exec(html)) !== null) {
+      const h = m[1].toLowerCase();
+      if (
+        h.indexOf("sololatino") < 0 &&
+        h.indexOf("w3.org") < 0 &&
+        h.indexOf("google") < 0 &&
+        h.indexOf("gstatic") < 0 &&
+        h.indexOf("schema.org") < 0
+      ) {
+        hosts.push(h);
       }
     }
+    dump("H", uniq(hosts).join(" "), 8);
 
-    if (streams.length) return streams;
+    // urls que empiezan con emb
+    const embs = uniq(html.match(/https?:\/\/emb[^\s"'<>]*/gi) || []);
+    dbg("embs: " + embs.length);
+    embs.slice(0, 2).forEach((e, i) => dump("E" + (i + 1) + "-", e, 5));
 
-    // 3) pistas en el HTML para entender como carga el reproductor
-    const probes = [
-      ["iframe", /iframe/i],
-      ["data-post", /data-post/i],
-      ["data-nume", /data-nume/i],
-      ["admin-ajax", /admin-ajax/i],
-      ["dooplayer", /dooplayer/i],
-      ["embed", /embed/i],
-      ["voe", /voe\./i],
-      ["streamwish", /streamwish|filelions/i],
-      ["atob", /atob\(/i],
-      ["data-url", /data-(src|url|link)/i],
-      ["server", /server/i],
-    ];
-    for (const p of probes) {
-      const s = snip(htmlText, p[1], 130);
-      dbg("[" + p[0] + "] " + (s ? s : "no aparece"));
+    // atributos data-
+    const attrs = [];
+    const reA = /\sdata-([a-z0-9_-]+)=/gi;
+    while ((m = reA.exec(html)) !== null) attrs.push(m[1]);
+    dump("D", uniq(attrs).join(" "), 4);
+
+    // scripts
+    const scripts = [];
+    const reS = /<script[^>]+src=["']([^"']+)["']/gi;
+    while ((m = reS.exec(html)) !== null) {
+      if (m[1].indexOf("google") < 0) scripts.push(m[1]);
     }
+    dump("S", uniq(scripts).join(" "), 6);
+
+    // ids
+    const imdb = html.match(/tt\d{7,8}/);
+    dbg("imdb: " + (imdb ? imdb[0] : "no"));
+    dbg("tmdb en html: " + (html.indexOf(String(tmdbId)) >= 0 ? "si" : "no"));
 
     return debug;
   } catch (error) {
