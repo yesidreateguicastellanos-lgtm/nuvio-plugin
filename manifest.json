@@ -1,14 +1,23 @@
 {
-  "name": "Xuper",
-  "version": "1.0.0",
-  "description": "Addon Xuper para Nuvio",
-  "author": "yesidreateeguicastellanos-lgtm",
+  "name": "Xuper Plugin Repo",
   "providers": [
     {
-      "id": "xuper",
+      "id": "com.xuper.provider",
       "name": "Xuper",
+      "description": "Extractor de reproducciones de Xuper",
       "filename": "index.js",
-      "supportedTypes": ["movie", "tv"]
+      "supportedTypes": ["movie", "tv"],
+      "enabled": true
+    }
+  ],
+  "scrapers": [
+    {
+      "id": "com.xuper.provider",
+      "name": "Xuper",
+      "description": "Extractor de reproducciones de Xuper",
+      "filename": "index.js",
+      "supportedTypes": ["movie", "tv"],
+      "enabled": true
     }
   ]
 }
