@@ -1,14 +1,14 @@
 {
   "id": "sololatino-repo",
   "name": "SoloLatino Repo",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Repositorio de plugins de SoloLatino para Nuvio",
   "scrapers": [
     {
       "id": "com.sololatino.provider",
       "name": "SoloLatino Provider",
       "description": "Extractor de reproducciones de SoloLatino",
-      "version": "1.0.0",
+      "version": "1.0.2",
       "author": "yesidreateguicastellanos-lgtm",
       "supportedTypes": ["movie", "tv"],
       "supportedPlatforms": ["android", "ios"],
