@@ -5,6 +5,7 @@
       "id": "com.xuper.provider",
       "name": "Xuper",
       "description": "Extractor de reproducciones de Xuper",
+      "version": "1.0.0",
       "filename": "index.js",
       "supportedTypes": ["movie", "tv"],
       "enabled": true
@@ -15,6 +16,7 @@
       "id": "com.xuper.provider",
       "name": "Xuper",
       "description": "Extractor de reproducciones de Xuper",
+      "version": "1.0.0",
       "filename": "index.js",
       "supportedTypes": ["movie", "tv"],
       "enabled": true
