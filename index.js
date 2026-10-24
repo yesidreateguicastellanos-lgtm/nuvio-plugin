@@ -19,21 +19,6 @@ function chunk(s, n) {
   return out;
 }
 
-function uniq(arr) {
-  return arr.filter((x, i) => arr.indexOf(x) === i);
-}
-
-async function getTitles(tmdbId, mediaType) {
-  const kind = mediaType === "movie" ? "movie" : "tv";
-  const url =
-    "https://api.themoviedb.org/3/" + kind + "/" + tmdbId +
-    "?api_key=" + TMDB_API_KEY + "&language=es-MX";
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("TMDB HTTP " + res.status);
-  const d = await res.json();
-  return [d.title || d.name].filter(Boolean);
-}
-
 async function getStreams(tmdbId, mediaType, season, episode) {
   const debug = [];
   const dbg = (msg) =>
@@ -45,14 +30,17 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       provider: "sololatino",
     });
   const dump = (label, text, max) => {
-    const parts = chunk(text, 34).slice(0, max || 8);
-    if (!parts.length) dbg(label + " -");
-    parts.forEach((p, i) => dbg(label + (i + 1) + ": " + p));
+    chunk(text, 34).slice(0, max).forEach((p, i) => dbg(label + (i + 1) + ": " + p));
   };
 
   try {
-    const titles = await getTitles(tmdbId, mediaType);
-    const slug = slugify(titles[0]);
+    const kind = mediaType === "movie" ? "movie" : "tv";
+    const tr = await fetch(
+      "https://api.themoviedb.org/3/" + kind + "/" + tmdbId +
+        "?api_key=" + TMDB_API_KEY + "&language=es-MX"
+    );
+    const td = await tr.json();
+    const slug = slugify(td.title || td.name);
     const u =
       mediaType === "movie"
         ? BASE_URL + "/pelicula/" + slug
@@ -61,50 +49,22 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     const r = await fetch(u, {
       headers: { "User-Agent": UA, Referer: BASE_URL + "/" },
     });
-    dbg("HTTP " + r.status);
     const html = await r.text();
 
-    // dominios externos
-    const hosts = [];
-    const reH = /https?:\/\/([a-z0-9.-]+)/gi;
-    let m;
-    while ((m = reH.exec(html)) !== null) {
-      const h = m[1].toLowerCase();
-      if (
-        h.indexOf("sololatino") < 0 &&
-        h.indexOf("w3.org") < 0 &&
-        h.indexOf("google") < 0 &&
-        h.indexOf("gstatic") < 0 &&
-        h.indexOf("schema.org") < 0
-      ) {
-        hosts.push(h);
+    // URL emb... completa
+    const embs = html.match(/https?:\/\/emb[^\s"'<>]*/gi) || [];
+    if (embs.length) dump("E", embs[0], 6);
+    else dbg("sin url emb");
+
+    // contexto alrededor de embed69 y xupalac
+    ["embed69", "xupalac"].forEach((k) => {
+      const i = html.indexOf(k);
+      if (i < 0) {
+        dbg(k + ": no");
+      } else {
+        dump(k.substr(0, 2).toUpperCase() + "-", html.substr(Math.max(0, i - 60), 200).replace(/\s+/g, " "), 6);
       }
-    }
-    dump("H", uniq(hosts).join(" "), 8);
-
-    // urls que empiezan con emb
-    const embs = uniq(html.match(/https?:\/\/emb[^\s"'<>]*/gi) || []);
-    dbg("embs: " + embs.length);
-    embs.slice(0, 2).forEach((e, i) => dump("E" + (i + 1) + "-", e, 5));
-
-    // atributos data-
-    const attrs = [];
-    const reA = /\sdata-([a-z0-9_-]+)=/gi;
-    while ((m = reA.exec(html)) !== null) attrs.push(m[1]);
-    dump("D", uniq(attrs).join(" "), 4);
-
-    // scripts
-    const scripts = [];
-    const reS = /<script[^>]+src=["']([^"']+)["']/gi;
-    while ((m = reS.exec(html)) !== null) {
-      if (m[1].indexOf("google") < 0) scripts.push(m[1]);
-    }
-    dump("S", uniq(scripts).join(" "), 6);
-
-    // ids
-    const imdb = html.match(/tt\d{7,8}/);
-    dbg("imdb: " + (imdb ? imdb[0] : "no"));
-    dbg("tmdb en html: " + (html.indexOf(String(tmdbId)) >= 0 ? "si" : "no"));
+    });
 
     return debug;
   } catch (error) {
