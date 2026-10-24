@@ -75,7 +75,7 @@ async function getTitles(tmdbId, mediaType) {
     "https://api.themoviedb.org/3/" + kind + "/" + tmdbId +
     "?api_key=" + TMDB_API_KEY + "&language=es-MX";
   const res = await fetch(url);
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error("TMDB HTTP " + res.status);
   const d = await res.json();
   const names = [
     d.title || d.name,
@@ -95,30 +95,106 @@ function buildUrls(slug, mediaType, season, episode) {
 }
 
 async function getStreams(tmdbId, mediaType, season, episode) {
+  const debug = [];
+  const dbg = (msg) =>
+    debug.push({
+      name: "DEBUG: " + msg,
+      title: "DEBUG: " + msg,
+      url: "https://example.com/debug",
+      quality: "Debug",
+      provider: "sololatino",
+    });
+
   try {
-    const titles = await getTitles(tmdbId, mediaType);
-    if (!titles.length) return [];
+    dbg("inicio id=" + tmdbId + " tipo=" + mediaType);
+
+    let titles = [];
+    try {
+      titles = await getTitles(tmdbId, mediaType);
+    } catch (e) {
+      dbg("TMDB fallo: " + e.message);
+      return debug;
+    }
+    if (!titles.length) {
+      dbg("TMDB sin titulo");
+      return debug;
+    }
+    dbg("titulos: " + titles.join(" | "));
 
     let htmlText = null;
     for (const t of titles) {
       for (const u of buildUrls(slugify(t), mediaType, season, episode)) {
-        const r = await fetch(u, {
-          headers: { "User-Agent": UA, Referer: BASE_URL + "/" },
-        });
-        if (r.ok) {
-          htmlText = await r.text();
-          break;
+        try {
+          const r = await fetch(u, {
+            headers: { "User-Agent": UA, Referer: BASE_URL + "/" },
+          });
+          if (r.ok) {
+            htmlText = await r.text();
+            dbg("pagina OK " + u);
+            break;
+          } else {
+            dbg("HTTP " + r.status + " " + u);
+          }
+        } catch (e) {
+          dbg("fetch fallo " + u + " " + e.message);
         }
       }
       if (htmlText) break;
     }
-    if (!htmlText) return [];
+    if (!htmlText) return debug;
 
     const streams = [];
     const iframeRegex = /<iframe[^>]+src=["']([^"']+)["']/gi;
     let match;
+    let count = 0;
 
     while ((match = iframeRegex.exec(htmlText)) !== null) {
+      count++;
       let iframeUrl = match[1];
       if (iframeUrl.startsWith("//")) iframeUrl = "https:" + iframeUrl;
-      else if (iframeUrl.startsWith("
+      else if (iframeUrl.startsWith("/")) iframeUrl = BASE_URL + iframeUrl;
+
+      let directUrl = null;
+      let serverName = "";
+
+      if (iframeUrl.includes("voe")) {
+        serverName = "VOE";
+        directUrl = await extractVOE(iframeUrl);
+      } else if (
+        iframeUrl.includes("streamwish") ||
+        iframeUrl.includes("filelions")
+      ) {
+        serverName = "Streamwish";
+        directUrl = await extractStreamwish(iframeUrl);
+      } else {
+        dbg("iframe no soportado " + iframeUrl);
+        continue;
+      }
+
+      if (!directUrl) {
+        dbg("sin video en " + serverName + " " + iframeUrl);
+        continue;
+      }
+
+      streams.push({
+        name: "SoloLatino - " + serverName,
+        title: "SoloLatino - " + serverName,
+        url: directUrl,
+        quality: "Auto",
+        headers: { "User-Agent": UA, Referer: iframeUrl },
+        provider: "sololatino",
+      });
+    }
+
+    if (count === 0) {
+      dbg("la pagina no tiene iframes (largo " + htmlText.length + ")");
+    }
+
+    return streams.length ? streams : debug;
+  } catch (error) {
+    dbg("excepcion: " + (error && error.message ? error.message : error));
+    return debug;
+  }
+}
+
+module.exports = { getStreams };
