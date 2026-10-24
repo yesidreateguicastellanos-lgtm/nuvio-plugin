@@ -1,17 +1,18 @@
 {
-  "name": "SoloLatino Repository",
+  "id": "sololatino-repo",
+  "name": "SoloLatino Repo",
   "version": "1.0.0",
-  "id": "com.sololatino.repository",
   "description": "Repositorio de plugins de SoloLatino para Nuvio",
-  "icon": "https://sololatino.net/favicon.ico",
-  "plugins": [
+  "scrapers": [
     {
       "id": "com.sololatino.provider",
       "name": "SoloLatino Provider",
       "version": "1.0.0",
       "description": "Extractor de reproducciones de SoloLatino",
       "icon": "https://sololatino.net/favicon.ico",
-      "main": "index.js"
+      "filename": "index.js",
+      "supportedTypes": ["movie", "tv"],
+      "enabled": true
     }
   ]
 }
