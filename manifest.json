@@ -1,5 +1,8 @@
 {
   "name": "Xuper Plugin Repo",
+  "version": "1.0.0",
+  "description": "Repositorio de complementos para Nuvio",
+  "author": "yesidreateeguicastellanos-lgtm",
   "providers": [
     {
       "id": "com.xuper.provider",
