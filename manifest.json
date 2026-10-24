@@ -1,8 +1,23 @@
 {
-  "id": "com.sololatino.provider",
-  "name": "SoloLatino Provider",
-  "version": "1.0.0",
-  "description": "Extractor de reproducciones de SoloLatino para películas y series.",
-  "icon": "https://sololatino.net/favicon.ico",
-  "main": "index.js"
+  "name": "Nuvio Plugin Repo",
+  "providers": [
+    {
+      "id": "com.sololatino.provider",
+      "name": "SoloLatino Provider",
+      "description": "Extractor de reproducciones de SoloLatino",
+      "filename": "index.js",
+      "supportedTypes": ["movie", "tv"],
+      "enabled": true
+    }
+  ],
+  "scrapers": [
+    {
+      "id": "com.sololatino.provider",
+      "name": "SoloLatino Provider",
+      "description": "Extractor de reproducciones de SoloLatino",
+      "filename": "index.js",
+      "supportedTypes": ["movie", "tv"],
+      "enabled": true
+    }
+  ]
 }
