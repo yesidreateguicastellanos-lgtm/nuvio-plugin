@@ -1,12 +1,13 @@
 {
-  "name": "Xuper Plugin",
+  "name": "Xuper",
   "version": "1.0.0",
-  "description": "Addon para Nuvio basado en el plugin de Xuper para Kino",
+  "description": "Addon Xuper para Nuvio",
   "author": "yesidreateeguicastellanos-lgtm",
   "providers": [
     {
+      "id": "xuper",
       "name": "Xuper",
-      "file": "index.js"
+      "filename": "index.js"
     }
   ]
 }
