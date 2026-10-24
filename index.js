@@ -1,11 +1,9 @@
 const BASE_URL = "https://sololatino.net";
+const TMDB_API_KEY = "0f20f54cc72e14f7792c2114ce6b1c5a";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
-/**
- * Convierte un título en un slug válido para URL (ej. "Tulsa King" -> "tulsa-king")
- */
 function slugify(text) {
-  return text
-    .toString()
+  return String(text)
     .toLowerCase()
     .trim()
     .normalize("NFD")
@@ -15,28 +13,25 @@ function slugify(text) {
     .replace(/-+/g, "-");
 }
 
-/**
- * Desempacador genérico para funciones eval(function(p,a,c,k,e,d)...)
- */
 function unpackJS(packedCode) {
   try {
-    const match = packedCode.match(/}\('(.+)',\s*(\d+),\s*(\d+),\s*'([^']+)'\.split\('\|'\)/);
+    const match = packedCode.match(
+      /}\('(.+)',\s*(\d+),\s*(\d+),\s*'([^']+)'\.split\('\|'\)/
+    );
     if (!match) return packedCode;
 
-    let [, p, a, c, k] = match;
-    a = parseInt(a, 10);
-    c = parseInt(c, 10);
-    k = k.split('|');
+    let p = match[1];
+    const a = parseInt(match[2], 10);
+    let c = parseInt(match[3], 10);
+    const k = match[4].split("|");
 
-    const baseUnpack = (num) => {
-      return (num < a ? '' : baseUnpack(Math.floor(num / a))) + 
-             ((num = num % a) > 35 ? String.fromCharCode(num + 29) : num.toString(36));
-    };
+    const baseUnpack = (num) =>
+      (num < a ? "" : baseUnpack(Math.floor(num / a))) +
+      ((num = num % a) > 35 ? String.fromCharCode(num + 29) : num.toString(36));
 
     while (c--) {
       if (k[c]) {
-        const regex = new RegExp('\\b' + baseUnpack(c) + '\\b', 'g');
-        p = p.replace(regex, k[c]);
+        p = p.replace(new RegExp("\\b" + baseUnpack(c) + "\\b", "g"), k[c]);
       }
     }
     return p;
@@ -45,111 +40,85 @@ function unpackJS(packedCode) {
   }
 }
 
-/**
- * Extractor para VOE
- */
 async function extractVOE(iframeUrl) {
   try {
-    const res = await fetch(iframeUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-    });
+    const res = await fetch(iframeUrl, { headers: { "User-Agent": UA } });
     const html = await res.text();
-
-    const hlsMatch = html.match(/'hls':\s*'([^']+)'/i) || html.match(/"hls":\s*"([^"]+)"/i);
-    if (hlsMatch) return hlsMatch[1];
-
-    const directMatch = html.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"']*/i);
-    return directMatch ? directMatch[0] : null;
-  } catch (err) {
+    const hls =
+      html.match(/'hls':\s*'([^']+)'/i) || html.match(/"hls":\s*"([^"]+)"/i);
+    if (hls) return hls[1];
+    const direct = html.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"']*/i);
+    return direct ? direct[0] : null;
+  } catch (e) {
     return null;
   }
 }
 
-/**
- * Extractor para Streamwish / FileLions
- */
 async function extractStreamwish(iframeUrl) {
   try {
-    const res = await fetch(iframeUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-    });
+    const res = await fetch(iframeUrl, { headers: { "User-Agent": UA } });
     const html = await res.text();
-
-    const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\).*\)/);
-    let unpackedText = html;
-    if (packedMatch) {
-      unpackedText = unpackJS(packedMatch[0]);
-    }
-
-    const m3u8Match = unpackedText.match(/file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i) ||
-                      unpackedText.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"']*/i);
-
-    return m3u8Match ? (m3u8Match[1] || m3u8Match[0]) : null;
-  } catch (err) {
+    const packed = html.match(/eval\(function\(p,a,c,k,e,d\).*\)/);
+    const text = packed ? unpackJS(packed[0]) : html;
+    const m =
+      text.match(/file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i) ||
+      text.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"']*/i);
+    return m ? m[1] || m[0] : null;
+  } catch (e) {
     return null;
   }
 }
 
-/**
- * Función principal requerida por Nuvio
- */
-export async function getStreams({ tmdbId, title, year, type, season, episode }) {
+async function getTitles(tmdbId, mediaType) {
+  const kind = mediaType === "movie" ? "movie" : "tv";
+  const url =
+    "https://api.themoviedb.org/3/" + kind + "/" + tmdbId +
+    "?api_key=" + TMDB_API_KEY + "&language=es-MX";
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const d = await res.json();
+  const names = [
+    d.title || d.name,
+    d.original_title || d.original_name,
+  ].filter(Boolean);
+  return names.filter((n, i) => names.indexOf(n) === i);
+}
+
+function buildUrls(slug, mediaType, season, episode) {
+  if (mediaType === "movie") {
+    return [BASE_URL + "/pelicula/" + slug];
+  }
+  return [
+    BASE_URL + "/episodio/" + slug + "-temporada-" + season + "-episodio-" + episode,
+    BASE_URL + "/episodio/" + slug + "-" + season + "x" + episode,
+  ];
+}
+
+async function getStreams(tmdbId, mediaType, season, episode) {
   try {
-    const slug = slugify(title);
-    let targetUrl = "";
+    const titles = await getTitles(tmdbId, mediaType);
+    if (!titles.length) return [];
 
-    if (type === "movie") {
-      targetUrl = `${BASE_URL}/pelicula/${slug}`;
-    } else {
-      targetUrl = `${BASE_URL}/episodio/${slug}-temporada-${season}-episodio-${episode}`;
-    }
-
-    const response = await fetch(targetUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": `${BASE_URL}/`
+    let htmlText = null;
+    for (const t of titles) {
+      for (const u of buildUrls(slugify(t), mediaType, season, episode)) {
+        const r = await fetch(u, {
+          headers: { "User-Agent": UA, Referer: BASE_URL + "/" },
+        });
+        if (r.ok) {
+          htmlText = await r.text();
+          break;
+        }
       }
-    });
+      if (htmlText) break;
+    }
+    if (!htmlText) return [];
 
-    if (!response.ok) return [];
-
-    const htmlText = await response.text();
     const streams = [];
-
-    // Extraer iframes
     const iframeRegex = /<iframe[^>]+src=["']([^"']+)["']/gi;
     let match;
 
     while ((match = iframeRegex.exec(htmlText)) !== null) {
       let iframeUrl = match[1];
       if (iframeUrl.startsWith("//")) iframeUrl = "https:" + iframeUrl;
-      else if (iframeUrl.startsWith("/")) iframeUrl = BASE_URL + iframeUrl;
-
-      let directUrl = null;
-      let serverName = "Servidor Latino";
-
-      if (iframeUrl.includes("voe")) {
-        serverName = "VOE";
-        directUrl = await extractVOE(iframeUrl);
-      } else if (iframeUrl.includes("streamwish") || iframeUrl.includes("filelions")) {
-        serverName = "Streamwish";
-        directUrl = await extractStreamwish(iframeUrl);
-      }
-
-      streams.push({
-        name: `SoloLatino - ${serverName}`,
-        url: directUrl || iframeUrl,
-        quality: "Auto / 1080p",
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-          "Referer": iframeUrl
-        }
-      });
-    }
-
-    return streams;
-  } catch (error) {
-    console.error("[SoloLatino Plugin Error]:", error);
-    return [];
-  }
-}
+      else if (iframeUrl.startsWith("
