@@ -1,22 +1,12 @@
 {
-  "id": "sololatino-repo",
-  "name": "SoloLatino Repo",
-  "version": "1.0.2",
-  "description": "Repositorio de plugins de SoloLatino para Nuvio",
-  "scrapers": [
+  "name": "Xuper Plugin",
+  "version": "1.0.0",
+  "description": "Addon para Nuvio basado en el plugin de Xuper para Kino",
+  "author": "yesidreateeguicastellanos-lgtm",
+  "providers": [
     {
-      "id": "com.sololatino.provider",
-      "name": "SoloLatino Provider",
-      "description": "Extractor de reproducciones de SoloLatino",
-      "version": "1.0.2",
-      "author": "yesidreateguicastellanos-lgtm",
-      "supportedTypes": ["movie", "tv"],
-      "supportedPlatforms": ["android", "ios"],
-      "formats": ["mp4", "m3u8"],
-      "contentLanguage": ["es"],
-      "logo": "https://sololatino.net/favicon.ico",
-      "filename": "index.js",
-      "enabled": true
+      "name": "Xuper",
+      "file": "index.js"
     }
   ]
 }
