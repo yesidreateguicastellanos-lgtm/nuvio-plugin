@@ -4,14 +4,14 @@
   "id": "com.sololatino.repository",
   "description": "Repositorio de plugins de SoloLatino para Nuvio",
   "icon": "https://sololatino.net/favicon.ico",
-  "providers": [
+  "plugins": [
     {
       "id": "com.sololatino.provider",
       "name": "SoloLatino Provider",
+      "version": "1.0.0",
       "description": "Extractor de reproducciones de SoloLatino",
-      "filename": "index.js",
-      "supportedTypes": ["movie", "tv"],
-      "enabled": true
+      "icon": "https://sololatino.net/favicon.ico",
+      "main": "index.js"
     }
   ]
 }
