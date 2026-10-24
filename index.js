@@ -1,130 +1,215 @@
-const TMDB_API_KEY = "0f20f54cc72e14f7792c2114ce6b1c5a";
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
-const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+// =====================================================================
+// ADDON DE NUVIO PARA XUPER (Basado en el plugin de Kino)
+// =====================================================================
 
-function chunk(s, n) {
-  const out = [];
-  for (let i = 0; i < s.length; i += n) out.push(s.substr(i, n));
-  return out;
-}
+// --- 1. CONSTANTES (Extraídas de config.js) ---
+const HOSTS = ["osuhk.m3x8o50te.com", "oogoy.f30c96w8.com"];
+const PORTAL_CODE = "masnew";
+const USER_AGENT = "okhttp/3.12.12";
+const APK_VER_HEADER = "43404";
+const SPKG_VER = "2025-08-07 05:40:11_36_16_";
+const APP_ID = "com.android.msandroid";
+const APK_VERSION = "49902";
+const UA_CDN = "Ranger/4.9.4-17294ac0";
+const FIXED_MAC = "02:00:00:00:00:00";
+const SHARED_EMAIL = "kinoplayer@outlook.es";
+const SHARED_PASSWORD = "Cris2337677";
 
-function b64decode(s) {
-  s = String(s).replace(/-/g, "+").replace(/_/g, "/");
-  let out = "";
-  let buf = 0;
-  let bits = 0;
-  for (let i = 0; i < s.length; i++) {
-    const v = B64.indexOf(s.charAt(i));
-    if (v < 0) continue;
-    buf = (buf << 6) | v;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      out += String.fromCharCode((buf >> bits) & 255);
-      buf = buf & ((1 << bits) - 1);
+// El dispositivo emulado que espera el portal
+const DEVICE_FIXED = {
+  loginType: "2", appLanguage: "en", hardwareInfo: "ranchu",
+  model: "sdk_gphone64_arm64", product: "sdk_gphone64_arm64",
+  cpu: "arm64-v8a", B29: "", reserve1: "", deviceToken: "",
+  drmId: "", sdkVer: 36, apkVersion: APK_VERSION, appId: APP_ID, sysVersion: SPKG_VER,
+};
+
+// --- 2. CONFIGURACIÓN DE CIFRADO ---
+// TODO: Aquí va la clave real cuando la consigas. 
+// Por ahora usamos un placeholder. Si el portal acepta peticiones sin cifrar, no la necesitaremos.
+const MAGIS_KEY = "CLAVE_PENDIENTE"; 
+
+// Función de cifrado (Usando CryptoJS para Nuvio)
+// NOTA: Nuvio usa Hermes, así que necesitamos que CryptoJS esté disponible.
+// Si no lo está, tendremos que usar una implementación manual más adelante.
+function encryptBody(plainText) {
+    // Si no tenemos la clave, intentamos enviar en texto plano para ver si el portal lo acepta (poco probable, pero probemos)
+    if (MAGIS_KEY === "CLAVE_PENDIENTE") {
+        console.log("[Xuper] ADVERTENCIA: Enviando cuerpo sin cifrar. El portal probablemente lo rechace.");
+        return plainText; 
     }
-  }
-  return out;
-}
-
-function extractArray(html, name) {
-  const i = html.indexOf(name);
-  if (i < 0) return null;
-  const start = html.indexOf("[", i);
-  if (start < 0) return null;
-  let depth = 0;
-  for (let j = start; j < html.length; j++) {
-    const c = html.charAt(j);
-    if (c === "[") depth++;
-    else if (c === "]") {
-      depth--;
-      if (depth === 0) return html.substring(start, j + 1);
-    }
-  }
-  return null;
-}
-
-async function getStreams(tmdbId, mediaType, season, episode) {
-  const debug = [];
-  const dbg = (msg) =>
-    debug.push({
-      name: msg,
-      title: msg,
-      url: "https://example.com/debug",
-      quality: "Debug",
-      provider: "sololatino",
-    });
-  const dump = (label, text, max) => {
-    chunk(text, 34).slice(0, max).forEach((p, i) => dbg(label + (i + 1) + ": " + p));
-  };
-
-  try {
-    const kind = mediaType === "movie" ? "movie" : "tv";
-    const er = await fetch(
-      "https://api.themoviedb.org/3/" + kind + "/" + tmdbId +
-        "/external_ids?api_key=" + TMDB_API_KEY
-    );
-    const imdb = (await er.json()).imdb_id;
-    if (!imdb) {
-      dbg("sin imdb");
-      return debug;
-    }
-    const key =
-      mediaType === "movie" ? imdb : imdb + "-" + season + "x" + episode;
-
-    const url = "https://embed69.org/f/" + key;
-    const r = await fetch(url, {
-      headers: { "User-Agent": UA, Referer: "https://sololatino.net/" },
-    });
-    const html = await r.text();
-    dbg("HTTP " + r.status + " len " + html.length);
-
-    const fr = /<iframe[^>]+src=["']([^"']+)["']/i.exec(html);
-    dump("IF", fr ? fr[1] : "sin iframe", 2);
-
-    const arr = extractArray(html, "dataLink");
-    if (!arr) {
-      dbg("no se pudo leer dataLink");
-      const i = html.indexOf("dataLink");
-      dump("DL", html.substr(Math.max(0, i), 200).replace(/\s+/g, " "), 5);
-      return debug;
-    }
-
-    let data = null;
+    
+    // Lógica de cifrado real (3DES) una vez tengamos la clave
     try {
-      data = JSON.parse(arr);
+        // Requeriría: const CryptoJS = require("crypto-js");
+        // const encrypted = CryptoJS.TripleDES.encrypt(plainText, CryptoJS.enc.Utf8.parse(MAGIS_KEY), { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 });
+        // return Array.from(encrypted.toString()).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+        return plainText;
     } catch (e) {
-      dbg("JSON invalido");
-      dump("A", arr.substr(0, 200), 5);
-      return debug;
+        console.error("Error al cifrar:", e);
+        return plainText;
     }
-
-    const resumen = data
-      .map((d) => {
-        const lang = d.video_language || d.language || "?";
-        const srv = (d.sortedEmbeds || d.embeds || [])
-          .map((e) => e.servername || e.server || "?")
-          .join(",");
-        return lang + ":" + srv;
-      })
-      .join(" ");
-    dump("L", resumen, 3);
-
-    const first = ((data[0] && (data[0].sortedEmbeds || data[0].embeds)) || [])[0];
-    if (first && first.link) {
-      const parts = String(first.link).split(".");
-      dbg("token partes: " + parts.length);
-      const payload = parts.length >= 2 ? b64decode(parts[1]) : first.link;
-      dump("P", payload, 4);
-    } else {
-      dbg("sin link en primer embed");
-    }
-
-    return debug;
-  } catch (error) {
-    dbg("excepcion: " + (error && error.message ? error.message : error));
-    return debug;
-  }
 }
 
+function decryptBlob(hexString) {
+    // Si no está cifrado, lo devolvemos tal cual
+    if (MAGIS_KEY === "CLAVE_PENDIENTE") return hexString;
+
+    // Lógica de descifrado real (3DES)
+    try {
+        // const base64Str = hexString.match(/.{1,2}/g).map(byte => String.fromCharCode(parseInt(byte, 16))).join('');
+        // const decrypted = CryptoJS.TripleDES.decrypt(base64Str, CryptoJS.enc.Utf8.parse(MAGIS_KEY), { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 });
+        // return decrypted.toString(CryptoJS.enc.Utf8);
+        return hexString;
+    } catch (e) {
+        console.error("Error al descifrar:", e);
+        return hexString;
+    }
+}
+
+// --- 3. FUNCIÓN DE LLAMADA AL PORTAL (Con Failover) ---
+async function callPortal(path, bean, userId = "", userToken = "") {
+    const body = {
+        portalCode: PORTAL_CODE, userId, userToken,
+        ...bean, ...DEVICE_FIXED,
+    };
+    
+    const wire = encryptBody(JSON.stringify(body));
+    
+    const headers = {
+        "apk": APP_ID,
+        "apkVer": APK_VER_HEADER,
+        "spkgVer": SPKG_VER,
+        "User-Agent": USER_AGENT,
+        "Content-Type": "application/json;charset=utf-8"
+    };
+
+    // Rotamos entre los hosts disponibles
+    for (const host of HOSTS) {
+        try {
+            console.log(`[Xuper] Llamando a ${host}/${path}...`);
+            const res = await fetch(`https://${host}/api/portalCore/${path}`, {
+                method: "POST",
+                headers: headers,
+                body: wire
+            });
+            
+            const text = await res.text();
+            const answer = JSON.parse(text);
+            
+            // Manejo de errores del portal (según portal.js)
+            if (answer.returnCode && answer.returnCode !== "0") {
+                throw new Error(`Portal Error: ${answer.returnCode} - ${answer.errorMessage || "Sin mensaje"}`);
+            }
+            
+            // Si hay data, la desciframos
+            if (typeof answer.data === "string" && answer.data !== "") {
+                const plain = decryptBlob(answer.data);
+                return JSON.parse(plain);
+            }
+            return answer.data || answer;
+            
+        } catch (e) {
+            console.log(`[Xuper] Fallo en host ${host}:`, e.message);
+            // Si el error es de red, intentamos con el siguiente host
+        }
+    }
+    throw new Error("No se pudo contactar con ningún servidor de Xuper");
+}
+
+// --- 4. BÚSQUEDA POR TMDB ---
+// Nuvio nos da el tmdbId, necesitamos buscar el título para usar en Xuper
+async function getTitleFromTmdb(tmdbId, mediaType) {
+    // Usamos una API pública o el endpoint de TMDB (necesitas una API Key de TMDB)
+    // Por simplicidad, aquí usaremos una API de terceros o simularemos la búsqueda.
+    // En un caso real, deberías usar la API de TMDB aquí.
+    const TMDB_API_KEY = "TU_API_KEY_DE_TMDB"; 
+    const url = `https://api.themoviedb.org/3/${mediaType === 'movie' ? 'movie' : 'tv'}/${tmdbId}?api_key=${TMDB_API_KEY}&language=es-ES`;
+    
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        return data.title || data.name;
+    } catch (e) {
+        console.error("Error obteniendo título de TMDB:", e);
+        return null;
+    }
+}
+
+// --- 5. FUNCIÓN PRINCIPAL DE NUVIO ---
+async function getStreams(tmdbId, mediaType, season, episode) {
+    try {
+        console.log(`[Xuper] Buscando: TMDB ID ${tmdbId}, Tipo: ${mediaType}, Temp: ${season}, Ep: ${episode}`);
+        
+        // PASO 1: Obtener el título desde TMDB
+        const title = await getTitleFromTmdb(tmdbId, mediaType);
+        if (!title) throw new Error("No se pudo obtener el título de TMDB");
+        console.log(`[Xuper] Título encontrado: ${title}`);
+        
+        // PASO 2: Buscar en Xuper usando el endpoint de search.js
+        // (Por ahora usamos la cuenta compartida para las pruebas)
+        const searchResult = await callPortal("v3/searchByName", {
+            value: title, type: "0", columnId: "", filter: "", pageNum: 1, pageSize: 20
+        });
+        
+        // Extraer el contentId (simplificado)
+        let contentId = null;
+        let isSeries = false;
+        if (searchResult && searchResult.searchItemList) {
+            const firstItem = searchResult.searchItemList[0]?.itemList[0];
+            if (firstItem) {
+                contentId = firstItem.contentId;
+                isSeries = firstItem.programType !== "movie";
+            }
+        }
+        
+        if (!contentId) throw new Error("No se encontró el título en Xuper");
+        console.log(`[Xuper] Content ID encontrado: ${contentId}, Es serie: ${isSeries}`);
+        
+        // PASO 3: Obtener el SLB (CDN y Token)
+        const slb = await callPortal("v14/getSlbInfo", {
+            hasPay: "0", userIdentity: "1", type: "merge", appVer: APK_VERSION,
+            lang: "es", encMediaSupported: 1, liveCodeList: ["masnew_live"],
+            appParams: "", reserve1: FIXED_MAC, pipFlag: "0"
+        });
+        
+        // Extraer la URL base del CDN y el token de autenticación
+        let cdnBase = "";
+        let authToken = "";
+        if (slb && slb.cdn_list) {
+            const cdn = slb.cdn_list.find(c => c.tag === "vod");
+            if (cdn && cdn.url_list && cdn.url_list[0]) {
+                cdnBase = cdn.main_addr.startsWith("http") ? cdn.main_addr : `https://${cdn.main_addr}`;
+                authToken = cdn.url_list[0].url;
+            }
+        }
+        
+        if (!cdnBase || !authToken) throw new Error("No se pudo obtener la CDN de Xuper");
+        
+        // PASO 4: Construir la URL final
+        // Nota: Para series, habría que obtener el contentId del capítulo específico primero.
+        // Por ahora, asumimos que es una película para la prueba.
+        const finalUrl = `${cdnBase}/vod/${contentId}_media.mp4`;
+        
+        console.log(`[Xuper] URL generada: ${finalUrl}`);
+        
+        // PASO 5: Devolver el stream a Nuvio
+        return [{
+            name: "Xuper",
+            url: finalUrl,
+            quality: "Auto",
+            headers: {
+                "Content-Auth": authToken,
+                "User-Agent": UA_CDN,
+                "App": APP_ID,
+                "App-Version": APK_VERSION
+            }
+        }];
+        
+    } catch (error) {
+        console.error("[Xuper] Error en getStreams:", error.message);
+        return []; // Devolvemos vacío si falla
+    }
+}
+
+// Exportar la función para Nuvio
 module.exports = { getStreams };
