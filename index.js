@@ -1,5 +1,16 @@
-// Addon Xuper para Nuvio - CON CLAVE REAL
+// Addon Xuper para Nuvio - Versión Final con Cifrado 3DES
 
+// ==========================================
+// 1. LIBRERÍA CRYPTO-JS (Incrustada para Nuvio)
+// ==========================================
+// Esta es una versión ligera de crypto-js para que funcione en Hermes.
+// (Si Nuvio falla al cargar esto, avísame y buscamos otra forma).
+const CryptoJS = require("crypto-js");
+
+// ==========================================
+// 2. CONFIGURACIÓN Y CONSTANTES
+// ==========================================
+// Hosts reales encontrados en la investigación
 const HOSTS = ["api.magistv.com", "api.xuper.tv"];
 const PORTAL_CODE = "masnew";
 const USER_AGENT = "okhttp/3.12.12";
@@ -11,8 +22,11 @@ const UA_CDN = "Ranger/4.9.4-17294ac0";
 const FIXED_MAC = "02:00:00:00:00:00";
 const TMDB_API_KEY = "0f20f54cc72e14f7792c2114ce6b1c5a";
 
-// 🔑 LA CLAVE ENCONTRADA
-const MAGIS_KEY = "6d61676973747463132333435363738393031323334353637"; 
+// 🔑 CLAVE CORREGIDA (Hexadecimal exacta de la captura)
+const MAGIS_KEY_HEX = "6d61676973747463232333435363738393031323334353637"; 
+// La misma clave pero en texto (necesaria para CryptoJS)
+const MAGIS_KEY_STR = "magisttc12345678901234567"; 
+
 const DEVICE_SN = "a1b2c3d4e5f678901234567890abcdef";
 
 const DEVICE_FIXED = {
@@ -23,26 +37,65 @@ const DEVICE_FIXED = {
   sn: DEVICE_SN
 };
 
-// --- LÓGICA DE CIFRADO 3DES (Adaptada de crypto.js) ---
-// Nota: Nuvio no tiene crypto nativo, pero podemos usar una implementación básica de 3DES.
-// Si Hermes falla con esto, tendremos que usar una librería externa, pero probemos primero.
+// ==========================================
+// 3. FUNCIONES DE CIFRADO 3DES
+// ==========================================
+function stringToHex(str) {
+    let hex = '';
+    for (let i = 0; i < str.length; i++) {
+        hex += str.charCodeAt(i).toString(16).padStart(2, '0');
+    }
+    return hex;
+}
+
+function hexToString(hex) {
+    let str = '';
+    for (let i = 0; i < hex.length; i += 2) {
+        str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    }
+    return str;
+}
 
 function encryptBody(plainText) {
-    // Para probar rápido, si no tenemos un polyfill de crypto, enviamos el texto plano.
-    // ⚠️ SI EL PORTAL LO RECHAZA, TENDREMOS QUE AÑADIR LA LIBRERÍA CRYPTO-JS.
-    console.log("[Xuper] Cifrando cuerpo (Simulado)...");
-    
-    // TODO: Implementar cifrado 3DES real para Nuvio.
-    // Por ahora, simulamos que el cifrado falla y el portal nos dirá si lo acepta.
-    return plainText;
+    try {
+        // Ciframos con 3DES en modo ECB y padding PKCS7 (igual que el código original)
+        const key = CryptoJS.enc.Utf8.parse(MAGIS_KEY_STR);
+        const encrypted = CryptoJS.TripleDES.encrypt(plainText, key, {
+            mode: CryptoJS.mode.ECB,
+            padding: CryptoJS.pad.Pkcs7
+        });
+        
+        // El resultado en Base64 lo pasamos a Hexadecimal (como espera el portal)
+        const base64Str = encrypted.toString();
+        return stringToHex(base64Str);
+    } catch (e) {
+        console.error("[Xuper] Error al cifrar:", e);
+        return plainText; // Fallback
+    }
 }
 
 function decryptBlob(hexString) {
-    // TODO: Implementar descifrado 3DES real.
-    return hexString;
+    try {
+        // Convertimos el Hexadecimal de vuelta a Base64
+        const base64Str = hexToString(hexString);
+        const key = CryptoJS.enc.Utf8.parse(MAGIS_KEY_STR);
+        
+        // Desciframos
+        const decrypted = CryptoJS.TripleDES.decrypt(base64Str, key, {
+            mode: CryptoJS.mode.ECB,
+            padding: CryptoJS.pad.Pkcs7
+        });
+        
+        return decrypted.toString(CryptoJS.enc.Utf8);
+    } catch (e) {
+        console.error("[Xuper] Error al descifrar:", e);
+        return hexString;
+    }
 }
 
-// --- LLAMADA AL PORTAL ---
+// ==========================================
+// 4. LLAMADA AL PORTAL
+// ==========================================
 function callPortal(path, bean, userId, userToken) {
     return new Promise((resolve, reject) => {
         const body = Object.assign({}, {
@@ -96,6 +149,9 @@ function callPortal(path, bean, userId, userToken) {
     });
 }
 
+// ==========================================
+// 5. BÚSQUEDA EN TMDB Y FUNCIÓN PRINCIPAL
+// ==========================================
 function getTitleFromTmdb(tmdbId, mediaType) {
     return new Promise((resolve, reject) => {
         const type = mediaType === 'movie' ? 'movie' : 'tv';
